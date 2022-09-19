@@ -37,5 +37,5 @@ require (
 	golang.org/x/net v0.0.0-20220624214902-1bab6f366d9e
 	golang.org/x/tools v0.1.9 // indirect
 	google.golang.org/grpc v1.47.0
-	pgregory.net/rapid v0.4.0
+	pgregory.net/rapid v0.5.3
 )
