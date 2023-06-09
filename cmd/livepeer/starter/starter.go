@@ -402,11 +402,6 @@ func StartLivepeer(ctx context.Context, cfg LivepeerConfig) {
 	watcherErr := make(chan error)
 	serviceErr := make(chan error)
 
-	// if err := checkOrStoreChainID(dbh, big.NewInt(0)); err != nil {
-	// 	glog.Error(err)
-	// 	return
-	// }
-
 	core.MaxSessions = *cfg.MaxSessions
 	if lpmon.Enabled {
 		lpmon.MaxSessions(core.MaxSessions)
@@ -543,22 +538,3 @@ func defaultAddr(addr, defaultHost, defaultPort string) string {
 	}
 	return addr
 }
-
-// func checkOrStoreChainID(dbh *common.DB, chainID *big.Int) error {
-// 	expectedChainID, err := dbh.ChainID()
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	if expectedChainID == nil {
-// 		// No chainID stored yet
-// 		// Store the provided chainID and skip the check
-// 		return dbh.SetChainID(chainID)
-// 	}
-
-// 	if expectedChainID.Cmp(chainID) != 0 {
-// 		return fmt.Errorf("expecting chainID of %v, but got %v. Did you change networks without changing network name or datadir?", expectedChainID, chainID)
-// 	}
-
-// 	return nil
-// }
