@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math/big"
@@ -101,9 +100,9 @@ type lphttp struct {
 	node         *core.LivepeerNode
 }
 
-func (h *lphttp) EndTranscodingSession(ctx context.Context, request *net.EndTranscodingSessionRequest) (*net.EndTranscodingSessionResponse, error) {
-	return endTranscodingSession(h.node, h.orchestrator, request)
-}
+// func (h *lphttp) EndTranscodingSession(ctx context.Context, request *net.EndTranscodingSessionRequest) (*net.EndTranscodingSessionResponse, error) {
+// 	return endTranscodingSession(h.node, h.orchestrator, request)
+// }
 
 // grpc methods
 func (h *lphttp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -169,14 +168,14 @@ func genOrchestratorReq(b common.Broadcaster) (*net.OrchestratorRequest, error) 
 	return &net.OrchestratorRequest{Address: b.Address().Bytes(), Sig: sig}, nil
 }
 
-func endTranscodingSession(node *core.LivepeerNode, orch Orchestrator, req *net.EndTranscodingSessionRequest) (*net.EndTranscodingSessionResponse, error) {
-	verifyToken := orch.AuthToken(req.AuthToken.SessionId, req.AuthToken.Expiration)
-	if !bytes.Equal(verifyToken.Token, req.AuthToken.Token) {
-		return nil, fmt.Errorf("Invalid auth token")
-	}
-	node.EndTranscodingSession(req.AuthToken.SessionId)
-	return &net.EndTranscodingSessionResponse{}, nil
-}
+// func endTranscodingSession(node *core.LivepeerNode, orch Orchestrator, req *net.EndTranscodingSessionRequest) (*net.EndTranscodingSessionResponse, error) {
+// 	verifyToken := orch.AuthToken(req.AuthToken.SessionId, req.AuthToken.Expiration)
+// 	if !bytes.Equal(verifyToken.Token, req.AuthToken.Token) {
+// 		return nil, fmt.Errorf("Invalid auth token")
+// 	}
+// 	node.EndTranscodingSession(req.AuthToken.SessionId)
+// 	return &net.EndTranscodingSessionResponse{}, nil
+// }
 
 func verifyOrchestratorReq(orch Orchestrator, addr ethcommon.Address, sig []byte) error {
 	if !orch.VerifySig(addr, addr.Hex(), sig) {

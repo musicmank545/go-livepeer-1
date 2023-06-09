@@ -55,12 +55,12 @@ type LivepeerNode struct {
 	Database *common.DB
 
 	// Transcoder public fields
-	SegmentChans      map[ManifestID]SegmentChan
-	Recipient         pm.Recipient
-	OrchestratorPool  common.OrchestratorPool
-	OrchSecret        string
-	Transcoder        Transcoder
-	TranscoderManager *RemoteTranscoderManager
+	SegmentChans     map[ManifestID]SegmentChan
+	Recipient        pm.Recipient
+	OrchestratorPool common.OrchestratorPool
+	OrchSecret       string
+	Transcoder       Transcoder
+	//TranscoderManager *RemoteTranscoderManager
 	//Balances          *AddressBalances
 	Capabilities    *Capabilities
 	AutoAdjustPrice bool
