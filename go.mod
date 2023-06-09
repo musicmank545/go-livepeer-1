@@ -7,9 +7,12 @@ require (
 	github.com/allegro/bigcache v1.2.1 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/cespare/cp v1.1.1 // indirect
+	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/ethereum/go-ethereum v1.10.26
 	github.com/fatih/color v1.12.0 // indirect
+	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/golang/glog v0.0.0-20210429001901-424d2337a529
+	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/jaypipes/ghw v0.10.0
@@ -37,5 +40,6 @@ require (
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3 // indirect
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	google.golang.org/grpc v1.51.0
+	google.golang.org/protobuf v1.28.1 // indirect
 	pgregory.net/rapid v0.4.0
 )

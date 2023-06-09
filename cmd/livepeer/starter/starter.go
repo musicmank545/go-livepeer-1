@@ -14,7 +14,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/livepeer/go-livepeer/common"
 	"github.com/livepeer/go-livepeer/core"
-	lpmon "github.com/livepeer/go-livepeer/monitor"
 	"github.com/livepeer/go-livepeer/server"
 	"github.com/livepeer/lpms/ffmpeg"
 )
@@ -370,33 +369,9 @@ func StartLivepeer(ctx context.Context, cfg LivepeerConfig) {
 
 	n.NodeType = core.TranscoderNode
 
-	lpmon.NodeID = *cfg.EthAcctAddr
-	if lpmon.NodeID != "" {
-		lpmon.NodeID += "-"
-	}
-	hn, _ := os.Hostname()
-	lpmon.NodeID += hn
-
-	if *cfg.Monitor {
-		if *cfg.MetricsExposeClientIP {
-			*cfg.MetricsPerStream = true
-		}
-		lpmon.Enabled = true
-		lpmon.PerStreamMetrics = *cfg.MetricsPerStream
-		lpmon.ExposeClientIP = *cfg.MetricsExposeClientIP
-		nodeType := lpmon.Default
-
-		nodeType = lpmon.Transcoder
-
-		lpmon.InitCensus(nodeType, core.LivepeerVersion)
-	}
-
 	serviceErr := make(chan error)
 
 	core.MaxSessions = *cfg.MaxSessions
-	if lpmon.Enabled {
-		lpmon.MaxSessions(core.MaxSessions)
-	}
 
 	n.Capabilities = core.NewCapabilities(transcoderCaps, core.MandatoryOCapabilities())
 	*cfg.CliAddr = defaultAddr(*cfg.CliAddr, "127.0.0.1", CliPort)

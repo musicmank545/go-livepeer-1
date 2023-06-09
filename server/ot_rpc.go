@@ -6,10 +6,8 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
-	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -20,8 +18,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/livepeer/lpms/ffmpeg"
 
 	"github.com/cenkalti/backoff"
 	"github.com/golang/glog"
@@ -34,7 +30,7 @@ import (
 	"github.com/livepeer/go-livepeer/clog"
 	"github.com/livepeer/go-livepeer/common"
 	"github.com/livepeer/go-livepeer/core"
-	"github.com/livepeer/go-livepeer/monitor"
+
 	"github.com/livepeer/go-livepeer/net"
 )
 
@@ -299,164 +295,4 @@ func sendTranscodeResult(ctx context.Context, n *core.LivepeerNode, orchAddr str
 	}
 	uploadDur := time.Since(uploadStart)
 	clog.V(common.VERBOSE).InfofErr(ctx, "Transcoding done results sent for taskId=%d url=%s uploadDur=%v", notify.TaskId, notify.Url, uploadDur, err)
-
-	if monitor.Enabled {
-		monitor.SegmentUploaded(ctx, 0, uint64(notify.TaskId), uploadDur, "")
-	}
-}
-
-// Orchestrator gRPC
-
-func (h *lphttp) RegisterTranscoder(req *net.RegisterRequest, stream net.Transcoder_RegisterTranscoderServer) error {
-	from := common.GetConnectionAddr(stream.Context())
-	glog.Infof("Got a RegisterTranscoder request from transcoder=%s capacity=%d", from, req.Capacity)
-
-	if req.Secret != h.orchestrator.TranscoderSecret() {
-		glog.Errorf("err=%q", errSecret.Error())
-		return errSecret
-	}
-	if req.Capacity <= 0 {
-		glog.Errorf("err=%q", errZeroCapacity.Error())
-		return errZeroCapacity
-	}
-	// handle case of legacy Transcoder which do not advertise capabilities
-	if req.Capabilities == nil {
-		req.Capabilities = core.NewCapabilities(core.DefaultCapabilities(), nil).ToNetCapabilities()
-	}
-	// blocks until stream is finished
-	h.orchestrator.ServeTranscoder(stream, int(req.Capacity), req.Capabilities)
-	return nil
-}
-
-// Orchestrator HTTP
-
-func (h *lphttp) TranscodeResults(w http.ResponseWriter, r *http.Request) {
-	orch := h.orchestrator
-
-	authType := r.Header.Get("Authorization")
-	creds := r.Header.Get("Credentials")
-	if protoVerLPT != authType {
-		glog.Error("Invalid auth type ", authType)
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	if creds != orch.TranscoderSecret() {
-		glog.Error("Invalid shared secret")
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil {
-		glog.Error("Error getting mime type ", err)
-		http.Error(w, err.Error(), http.StatusUnsupportedMediaType)
-		return
-	}
-
-	tid, err := strconv.ParseInt(r.Header.Get("TaskId"), 10, 64)
-	if err != nil {
-		glog.Error("Could not parse task ID ", err)
-		http.Error(w, "Invalid Task ID", http.StatusBadRequest)
-		return
-	}
-
-	// read detection data - only scene classification is supported
-	var detections []ffmpeg.DetectData
-	var sceneDetections []ffmpeg.SceneClassificationData
-	var detectionsHeader = r.Header.Get("Detections")
-	if len(detectionsHeader) > 0 {
-		err = json.Unmarshal([]byte(detectionsHeader), &sceneDetections)
-		if err != nil {
-			glog.Error("Could not parse detection data ", err)
-			http.Error(w, "Invalid detection data", http.StatusBadRequest)
-			return
-		}
-		for _, sd := range sceneDetections {
-			detections = append(detections, sd)
-		}
-	}
-
-	var res core.RemoteTranscoderResult
-	if transcodingErrorMimeType == mediaType {
-		w.Write([]byte("OK"))
-		body, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			glog.Errorf("Unable to read transcoding error body taskId=%v err=%q", tid, err)
-			res.Err = err
-		} else {
-			res.Err = fmt.Errorf(string(body))
-		}
-		glog.Errorf("Transcoding error for taskId=%v err=%q", tid, res.Err)
-		orch.TranscoderResults(tid, &res)
-		return
-	}
-
-	decodedPixels, err := strconv.ParseInt(r.Header.Get("Pixels"), 10, 64)
-	if err != nil {
-		glog.Error("Could not parse decoded pixels", err)
-		http.Error(w, "Invalid Pixels", http.StatusBadRequest)
-		return
-	}
-
-	var segments []*core.TranscodedSegmentData
-	if mediaType == "multipart/mixed" {
-		start := time.Now()
-		mr := multipart.NewReader(r.Body, params["boundary"])
-		for {
-			p, err := mr.NextPart()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				glog.Error("Could not process multipart part ", err)
-				res.Err = err
-				break
-			}
-			body, err := common.ReadAtMost(p, common.MaxSegSize)
-			if err != nil {
-				glog.Error("Error reading body ", err)
-				res.Err = err
-				break
-			}
-
-			if len(p.Header.Values("Pixels")) > 0 {
-				encodedPixels, err := strconv.ParseInt(p.Header.Get("Pixels"), 10, 64)
-				if err != nil {
-					glog.Error("Error getting pixels in header:", err)
-					res.Err = err
-					break
-				}
-				segments = append(segments, &core.TranscodedSegmentData{Data: body, Pixels: encodedPixels})
-			} else if p.Header.Get("Content-Type") == "application/octet-stream" {
-				// Perceptual hash data for last segment
-				if len(segments) > 0 {
-					segments[len(segments)-1].PHash = body
-				} else {
-					err := errors.New("Unknown perceptual hash")
-					glog.Error("No previous segment present to attach perceptual hash data to: ", err)
-					res.Err = err
-					break
-				}
-			}
-		}
-		res.TranscodeData = &core.TranscodeData{
-			Segments:   segments,
-			Pixels:     decodedPixels,
-			Detections: detections,
-		}
-		dlDur := time.Since(start)
-		glog.V(common.VERBOSE).Infof("Downloaded results from remote transcoder=%s taskId=%d dur=%s", r.RemoteAddr, tid, dlDur)
-
-		if monitor.Enabled {
-			monitor.SegmentDownloaded(r.Context(), 0, uint64(tid), dlDur)
-		}
-
-		orch.TranscoderResults(tid, &res)
-	}
-	if res.Err != nil {
-		http.Error(w, res.Err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Write([]byte("OK"))
 }

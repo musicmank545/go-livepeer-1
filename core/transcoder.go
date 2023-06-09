@@ -13,13 +13,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/golang/glog"
 
 	"github.com/livepeer/go-livepeer/clog"
 	"github.com/livepeer/go-livepeer/common"
-	"github.com/livepeer/go-livepeer/monitor"
+
 	"github.com/livepeer/lpms/ffmpeg"
 )
 
@@ -88,20 +87,9 @@ func (lt *LocalTranscoder) Transcode(ctx context.Context, md *SegTranscodingMeta
 		opts = append(opts, detectorsToTranscodeOptions(lt.workDir, ffmpeg.Software, md.DetectorProfiles)...)
 	}
 
-	_, seqNo, parseErr := parseURI(md.Fname)
-	start := time.Now()
-
 	res, err := ffmpeg.Transcode3(in, opts)
 	if err != nil {
 		return nil, err
-	}
-
-	if monitor.Enabled && parseErr == nil {
-		// This will run only when fname is actual URL and contains seqNo in it.
-		// When orchestrator works as transcoder, `fname` will be relative path to file in local
-		// filesystem and will not contain seqNo in it. For that case `SegmentTranscoded` will
-		// be called in orchestrator.go
-		monitor.SegmentTranscoded(ctx, 0, seqNo, md.Duration, time.Since(start), common.ProfilesNames(profiles), true, true)
 	}
 
 	return resToTranscodeData(ctx, res, opts)
@@ -140,20 +128,9 @@ func (nv *NetintTranscoder) Transcode(ctx context.Context, md *SegTranscodingMet
 		out = append(out, detectorsToTranscodeOptions(WorkDir, ffmpeg.Netint, md.DetectorProfiles)...)
 	}
 
-	_, seqNo, parseErr := parseURI(md.Fname)
-	start := time.Now()
-
 	res, err := nv.session.Transcode(in, out)
 	if err != nil {
 		return nil, err
-	}
-
-	if monitor.Enabled && parseErr == nil {
-		// This will run only when fname is actual URL and contains seqNo in it.
-		// When orchestrator works as transcoder, `fname` will be relative path to file in local
-		// filesystem and will not contain seqNo in it. For that case `SegmentTranscoded` will
-		// be called in orchestrator.go
-		monitor.SegmentTranscoded(ctx, 0, seqNo, md.Duration, time.Since(start), common.ProfilesNames(profiles), true, true)
 	}
 
 	return resToTranscodeData(ctx, res, out)
@@ -179,20 +156,9 @@ func (nv *NvidiaTranscoder) Transcode(ctx context.Context, md *SegTranscodingMet
 		out = append(out, detectorsToTranscodeOptions(WorkDir, ffmpeg.Nvidia, md.DetectorProfiles)...)
 	}
 
-	_, seqNo, parseErr := parseURI(md.Fname)
-	start := time.Now()
-
 	res, err := nv.session.Transcode(in, out)
 	if err != nil {
 		return nil, err
-	}
-
-	if monitor.Enabled && parseErr == nil {
-		// This will run only when fname is actual URL and contains seqNo in it.
-		// When orchestrator works as transcoder, `fname` will be relative path to file in local
-		// filesystem and will not contain seqNo in it. For that case `SegmentTranscoded` will
-		// be called in orchestrator.go
-		monitor.SegmentTranscoded(ctx, 0, seqNo, md.Duration, time.Since(start), common.ProfilesNames(profiles), true, true)
 	}
 
 	return resToTranscodeData(ctx, res, out)
