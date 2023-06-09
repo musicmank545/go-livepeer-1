@@ -61,9 +61,9 @@ type LivepeerNode struct {
 	OrchSecret        string
 	Transcoder        Transcoder
 	TranscoderManager *RemoteTranscoderManager
-	Balances          *AddressBalances
-	Capabilities      *Capabilities
-	AutoAdjustPrice   bool
+	//Balances          *AddressBalances
+	Capabilities    *Capabilities
+	AutoAdjustPrice bool
 	// Broadcaster public fields
 	//Sender pm.Sender
 
