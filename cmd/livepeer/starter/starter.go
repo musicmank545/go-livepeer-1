@@ -314,7 +314,7 @@ func StartLivepeer(ctx context.Context, cfg LivepeerConfig) {
 	}
 	defer dbh.Close()
 
-	n, err := core.NewLivepeerNode(nil, *cfg.Datadir, dbh)
+	n, err := core.NewLivepeerNode(*cfg.Datadir, dbh)
 	if err != nil {
 		glog.Errorf("Error creating livepeer node: %v", err)
 	}

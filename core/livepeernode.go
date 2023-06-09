@@ -17,10 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/livepeer/go-livepeer/pm"
-
 	"github.com/livepeer/go-livepeer/common"
-	"github.com/livepeer/go-livepeer/eth"
 )
 
 var ErrTranscoderAvail = errors.New("ErrTranscoderUnavailable")
@@ -55,8 +52,8 @@ type LivepeerNode struct {
 	Database *common.DB
 
 	// Transcoder public fields
-	SegmentChans     map[ManifestID]SegmentChan
-	Recipient        pm.Recipient
+	SegmentChans map[ManifestID]SegmentChan
+	//Recipient        pm.Recipient
 	OrchestratorPool common.OrchestratorPool
 	OrchSecret       string
 	Transcoder       Transcoder
@@ -78,7 +75,7 @@ type LivepeerNode struct {
 }
 
 // NewLivepeerNode creates a new Livepeer Node. Eth can be nil.
-func NewLivepeerNode(e eth.LivepeerEthClient, wd string, dbh *common.DB) (*LivepeerNode, error) {
+func NewLivepeerNode(wd string, dbh *common.DB) (*LivepeerNode, error) {
 	rand.Seed(time.Now().UnixNano())
 	return &LivepeerNode{
 		//Eth:             e,

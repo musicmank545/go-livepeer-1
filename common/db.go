@@ -13,8 +13,6 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/golang/glog"
-	"github.com/livepeer/go-livepeer/eth/blockwatch"
-	"github.com/livepeer/go-livepeer/pm"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 )
@@ -422,19 +420,6 @@ func (db *DB) Close() {
 	}
 }
 
-// LastSeenBlock returns the last block number stored by the DB
-func (db *DB) LastSeenBlock() (*big.Int, error) {
-	header, err := db.FindLatestMiniHeader()
-	if err != nil {
-		return nil, err
-	}
-	if header == nil {
-		return nil, nil
-	}
-
-	return header.Number, nil
-}
-
 func (db *DB) ChainID() (*big.Int, error) {
 	idString, err := db.selectKVStore("chainID")
 	if err != nil {
@@ -675,137 +660,6 @@ func (db *DB) UnbondingLocks(currentRound *big.Int) ([]*DBUnbondingLock, error) 
 	return unbondingLocks, nil
 }
 
-// StoreWinningTicket stores a signed ticket
-func (db *DB) StoreWinningTicket(ticket *pm.SignedTicket) error {
-	if ticket == nil || ticket.Ticket == nil {
-		return errors.New("cannot store nil ticket")
-	}
-	if ticket.Sig == nil {
-		return errors.New("cannot store nil sig")
-	}
-	if ticket.RecipientRand == nil {
-		return errors.New("cannot store nil recipientRand")
-	}
-
-	_, err := db.insertWinningTicket.Exec(
-		sql.Named("sender", ticket.Sender.Hex()),
-		sql.Named("recipient", ticket.Recipient.Hex()),
-		sql.Named("faceValue", ticket.FaceValue.Bytes()),
-		sql.Named("winProb", ticket.WinProb.Bytes()),
-		sql.Named("senderNonce", ticket.SenderNonce),
-		sql.Named("recipientRand", ticket.RecipientRand.Bytes()),
-		sql.Named("recipientRandHash", ticket.RecipientRandHash.Hex()),
-		sql.Named("sig", ticket.Sig),
-		sql.Named("creationRound", ticket.CreationRound),
-		sql.Named("creationRoundBlockHash", ticket.CreationRoundBlockHash.Hex()),
-		sql.Named("paramsExpirationBlock", ticket.ParamsExpirationBlock.Int64()),
-	)
-
-	if err != nil {
-		return errors.Wrapf(err, "failed inserting winning ticket sender=%v", ticket.Sender.Hex())
-	}
-	return nil
-}
-
-// MarkWinningTicketRedeemed stores the on-chain transaction hash and timestamp of redemption
-// This marks the ticket as being 'redeemed'
-func (db *DB) MarkWinningTicketRedeemed(ticket *pm.SignedTicket, txHash ethcommon.Hash) error {
-	if ticket == nil || ticket.Ticket == nil {
-		return errors.New("cannot update nil ticket")
-	}
-	if ticket.Sig == nil {
-		return errors.New("cannot update nil sig")
-	}
-
-	res, err := db.markWinningTicketRedeemed.Exec(txHash.Hex(), ticket.Sig)
-	if err != nil {
-		return errors.Wrapf(err, "failed marking winning ticket as redeemed sender=%v", ticket.Sender.Hex())
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return fmt.Errorf("no record found for sig=0x%x", ticket.Sig)
-	}
-	return nil
-}
-
-// RemoveWinningTicket removes a ticket
-func (db *DB) RemoveWinningTicket(ticket *pm.SignedTicket) error {
-	if ticket == nil || ticket.Ticket == nil {
-		return errors.New("cannot delete nil ticket")
-	}
-	if ticket.Sig == nil {
-		return errors.New("cannot delete nil sig")
-	}
-
-	_, err := db.removeWinningTicket.Exec(
-		ticket.Sig,
-	)
-	if err != nil {
-		return errors.Wrapf(err, "failed deleting winning ticket sender=%v", ticket.Sender.Hex())
-	}
-	return nil
-}
-
-// SelectEarliestWinningTicket selects the earliest stored winning ticket for a 'sender' that is not expired and not yet redeemed
-func (db *DB) SelectEarliestWinningTicket(sender ethcommon.Address, minCreationRound int64) (*pm.SignedTicket, error) {
-
-	row := db.selectEarliestWinningTicket.QueryRow(sender.Hex(), minCreationRound)
-	var (
-		senderString           string
-		recipient              string
-		faceValue              []byte
-		winProb                []byte
-		senderNonce            int
-		recipientRand          []byte
-		recipientRandHash      string
-		sig                    []byte
-		creationRound          int64
-		creationRoundBlockHash string
-		paramsExpirationBlock  int64
-	)
-	if err := row.Scan(&senderString, &recipient, &faceValue, &winProb, &senderNonce, &recipientRand, &recipientRandHash, &sig, &creationRound, &creationRoundBlockHash, &paramsExpirationBlock); err != nil {
-		if err.Error() != "sql: no rows in result set" {
-			return nil, fmt.Errorf("could not retrieve earliest ticket err=%q", err)
-		}
-		// If there is no result return no error, just nil value
-		return nil, nil
-	}
-
-	return &pm.SignedTicket{
-		Ticket: &pm.Ticket{
-			Sender:                 sender,
-			Recipient:              ethcommon.HexToAddress(recipient),
-			FaceValue:              new(big.Int).SetBytes(faceValue),
-			WinProb:                new(big.Int).SetBytes(winProb),
-			SenderNonce:            uint32(senderNonce),
-			RecipientRandHash:      ethcommon.HexToHash(recipientRandHash),
-			CreationRound:          creationRound,
-			CreationRoundBlockHash: ethcommon.HexToHash(creationRoundBlockHash),
-			ParamsExpirationBlock:  big.NewInt(paramsExpirationBlock),
-		},
-		Sig:           sig,
-		RecipientRand: new(big.Int).SetBytes(recipientRand),
-	}, nil
-}
-
-// WinningTicketCount returns the amount of non-redeemed winning tickets for a 'sender'
-func (db *DB) WinningTicketCount(sender ethcommon.Address, minCreationRound int64) (int, error) {
-	row := db.winningTicketCount.QueryRow(sender.Hex(), minCreationRound)
-	var count64 int64
-	if err := row.Scan(&count64); err != nil {
-		if err.Error() != "sql: no rows in result set" {
-			return 0, fmt.Errorf("could not retrieve latest header: %v", err)
-		}
-		// If there is no result return no error, just nil value
-		return 0, nil
-	}
-
-	return int(count64), nil
-}
-
 func buildSelectOrchsQuery(filter *DBOrchFilter) (string, error) {
 	query := "SELECT ethereumAddr, serviceURI, pricePerPixel, activationRound, deactivationRound, stake FROM orchestrators "
 	fil, err := buildFilterOrchsQuery(filter)
@@ -860,86 +714,6 @@ func buildFilterOrchsQuery(filter *DBOrchFilter) (string, error) {
 	}
 
 	return qry, nil
-}
-
-// FindLatestMiniHeader returns the MiniHeader with the highest blocknumber in the DB
-func (db *DB) FindLatestMiniHeader() (*blockwatch.MiniHeader, error) {
-	row := db.findLatestMiniHeader.QueryRow()
-	var (
-		number  int64
-		parent  string
-		hash    string
-		logsEnc []byte
-	)
-	if err := row.Scan(&number, &parent, &hash, &logsEnc); err != nil {
-		if err.Error() != "sql: no rows in result set" {
-			return nil, fmt.Errorf("could not retrieve latest header: %v", err)
-		}
-		// If there is no result return no error, just nil value
-		return nil, nil
-	}
-
-	logs, err := decodeLogsJSON(logsEnc)
-	if err != nil {
-		return nil, err
-	}
-	return &blockwatch.MiniHeader{
-		Number: big.NewInt(number),
-		Parent: ethcommon.HexToHash(parent),
-		Hash:   ethcommon.HexToHash(hash),
-		Logs:   logs,
-	}, nil
-}
-
-// FindAllMiniHeadersSortedByNumber returns all MiniHeaders in the DB sorting in descending order by block number
-func (db *DB) FindAllMiniHeadersSortedByNumber() ([]*blockwatch.MiniHeader, error) {
-	var headers []*blockwatch.MiniHeader
-	rows, err := db.findAllMiniHeadersSortedByNumber.Query()
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var (
-			number  int64
-			parent  string
-			hash    string
-			logsEnc []byte
-		)
-		if err := rows.Scan(&number, &parent, &hash, &logsEnc); err != nil {
-			return nil, err
-		}
-		logs, err := decodeLogsJSON(logsEnc)
-		if err != nil {
-			return nil, err
-		}
-		headers = append(headers, &blockwatch.MiniHeader{
-			Number: big.NewInt(number),
-			Parent: ethcommon.HexToHash(parent),
-			Hash:   ethcommon.HexToHash(hash),
-			Logs:   logs,
-		})
-	}
-	return headers, nil
-}
-
-// InsertMiniHeader inserts a MiniHeader into the database
-func (db *DB) InsertMiniHeader(header *blockwatch.MiniHeader) error {
-	if header == nil {
-		return errors.New("must provide a MiniHeader")
-	}
-	if header.Number == nil {
-		return errors.New("no block number found")
-	}
-	logsEnc, err := encodeLogsJSON(header.Logs)
-	if err != nil {
-		return err
-	}
-	_, err = db.insertMiniHeader.Exec(header.Number.Int64(), header.Parent.Hex(), header.Hash.Hex(), logsEnc)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // DeleteMiniHeader deletes a MiniHeader from the DB and takes in the blockhash of the block to be deleted as an argument

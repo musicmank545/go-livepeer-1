@@ -16,7 +16,6 @@ import (
 	"github.com/livepeer/go-livepeer/common"
 	"github.com/livepeer/go-livepeer/core"
 	"github.com/livepeer/go-livepeer/net"
-	"github.com/livepeer/go-livepeer/pm"
 	ffmpeg "github.com/livepeer/lpms/ffmpeg"
 	"github.com/livepeer/lpms/stream"
 	"github.com/patrickmn/go-cache"
@@ -195,25 +194,6 @@ func getFromDiscoveryAuthWebhookCache(id string) *discoveryAuthWebhookRes {
 		return nil
 	}
 	return webhookRes
-}
-
-func pmTicketParams(params *net.TicketParams) *pm.TicketParams {
-	if params == nil {
-		return nil
-	}
-
-	return &pm.TicketParams{
-		Recipient:         ethcommon.BytesToAddress(params.Recipient),
-		FaceValue:         new(big.Int).SetBytes(params.FaceValue),
-		WinProb:           new(big.Int).SetBytes(params.WinProb),
-		RecipientRandHash: ethcommon.BytesToHash(params.RecipientRandHash),
-		Seed:              new(big.Int).SetBytes(params.Seed),
-		ExpirationBlock:   new(big.Int).SetBytes(params.ExpirationBlock),
-		ExpirationParams: &pm.TicketExpirationParams{
-			CreationRound:          params.ExpirationParams.GetCreationRound(),
-			CreationRoundBlockHash: ethcommon.BytesToHash(params.ExpirationParams.GetCreationRoundBlockHash()),
-		},
-	}
 }
 
 func coreSegMetadata(segData *net.SegData) (*core.SegTranscodingMetadata, error) {
