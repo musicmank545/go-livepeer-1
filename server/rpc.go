@@ -3,14 +3,11 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -21,14 +18,11 @@ import (
 	"github.com/livepeer/go-livepeer/core"
 	"github.com/livepeer/go-livepeer/net"
 	"github.com/livepeer/go-livepeer/pm"
-	"github.com/livepeer/go-tools/drivers"
 	ffmpeg "github.com/livepeer/lpms/ffmpeg"
 	"github.com/livepeer/lpms/stream"
 	"github.com/patrickmn/go-cache"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -100,57 +94,6 @@ type BalanceUpdate struct {
 	// Status is the current status of the update
 	Status BalanceUpdateStatus
 }
-
-// BroadcastSession - session-specific state for broadcasters
-type BroadcastSession struct {
-	Broadcaster              common.Broadcaster
-	Params                   *core.StreamParameters
-	BroadcasterOS            drivers.OSSession
-	Sender                   pm.Sender
-	Balances                 *core.AddressBalances
-	OrchestratorScore        float32
-	VerifiedByPerceptualHash bool
-	lock                     *sync.RWMutex
-	// access these fields under the lock
-	SegsInFlight     []SegFlightMetadata
-	LatencyScore     float64
-	OrchestratorInfo *net.OrchestratorInfo
-	OrchestratorOS   drivers.OSSession
-	PMSessionID      string
-	Balance          Balance
-}
-
-func (bs *BroadcastSession) Transcoder() string {
-	bs.lock.RLock()
-	defer bs.lock.RUnlock()
-	return bs.OrchestratorInfo.Transcoder
-}
-
-func (bs *BroadcastSession) Address() string {
-	bs.lock.RLock()
-	defer bs.lock.RUnlock()
-	return hexutil.Encode(bs.OrchestratorInfo.Address)
-}
-
-func (bs *BroadcastSession) Clone() *BroadcastSession {
-	bs.lock.RLock()
-	newSess := *bs
-	newSess.lock = &sync.RWMutex{}
-	bs.lock.RUnlock()
-	return &newSess
-}
-
-func (bs *BroadcastSession) IsTrusted() bool {
-	return bs.OrchestratorScore == common.Score_Trusted
-}
-
-// ReceivedTranscodeResult contains received transcode result data and related metadata
-type ReceivedTranscodeResult struct {
-	*net.TranscodeData
-	Info         *net.OrchestratorInfo
-	LatencyScore float64
-}
-
 type lphttp struct {
 	orchestrator Orchestrator
 	orchRPC      *grpc.Server
@@ -172,70 +115,8 @@ func (h *lphttp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *lphttp) GetOrchestrator(context context.Context, req *net.OrchestratorRequest) (*net.OrchestratorInfo, error) {
-	return getOrchestrator(h.orchestrator, req)
-}
-
 func (h *lphttp) Ping(context context.Context, req *net.PingPong) (*net.PingPong, error) {
 	return ping(context, req, h.orchestrator)
-}
-
-// XXX do something about the implicit start of the http mux? this smells
-func StartTranscodeServer(orch Orchestrator, bind string, mux *http.ServeMux, workDir string, acceptRemoteTranscoders bool, n *core.LivepeerNode) error {
-	s := grpc.NewServer()
-	lp := lphttp{
-		orchestrator: orch,
-		orchRPC:      s,
-		transRPC:     mux,
-		node:         n,
-	}
-	net.RegisterOrchestratorServer(s, &lp)
-	lp.transRPC.HandleFunc("/segment", lp.ServeSegment)
-	if acceptRemoteTranscoders {
-		net.RegisterTranscoderServer(s, &lp)
-		lp.transRPC.HandleFunc("/transcodeResults", lp.TranscodeResults)
-	}
-
-	cert, key, err := getCert(orch.ServiceURI(), workDir)
-	if err != nil {
-		return err
-	}
-
-	glog.Info("Listening for RPC on ", bind)
-	srv := http.Server{
-		Addr:        bind,
-		Handler:     &lp,
-		IdleTimeout: HTTPIdleTimeout,
-	}
-	return srv.ListenAndServeTLS(cert, key)
-}
-
-// CheckOrchestratorAvailability - the broadcaster calls CheckOrchestratorAvailability which invokes Ping on the orchestrator
-func CheckOrchestratorAvailability(orch Orchestrator) bool {
-	ts := time.Now()
-	tsSignature, err := orch.Sign([]byte(fmt.Sprintf("%v", ts)))
-	if err != nil {
-		return false
-	}
-
-	ping := crypto.Keccak256(tsSignature)
-
-	orchClient, conn, err := startOrchestratorClient(context.Background(), orch.ServiceURI())
-	if err != nil {
-		return false
-	}
-	defer conn.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), GRPCTimeout)
-	defer cancel()
-
-	pong, err := orchClient.Ping(ctx, &net.PingPong{Value: ping})
-	if err != nil {
-		glog.Error("Was not able to submit Ping: ", err)
-		return false
-	}
-
-	return orch.VerifySig(orch.Address(), string(ping), pong.Value)
 }
 
 func ping(context context.Context, req *net.PingPong, orch Orchestrator) (*net.PingPong, error) {
@@ -265,26 +146,6 @@ func GetOrchestratorInfo(ctx context.Context, bcast common.Broadcaster, orchestr
 	return r, nil
 }
 
-// EndSession - the broadcaster calls EndTranscodingSession to tear down sessions used for verification only once
-func EndTranscodingSession(ctx context.Context, sess *BroadcastSession) error {
-	uri, err := url.Parse(sess.Transcoder())
-	if err != nil {
-		return err
-	}
-	c, conn, err := startOrchestratorClient(ctx, uri)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	req, err := genEndSessionRequest(sess)
-	_, err = c.EndTranscodingSession(context.Background(), req)
-	if err != nil {
-		return errors.Wrapf(err, "Could not end orchestrator session orch=%v", sess.Transcoder())
-	}
-	return nil
-}
-
 func startOrchestratorClient(ctx context.Context, uri *url.URL) (net.OrchestratorClient, *grpc.ClientConn, error) {
 	clog.V(common.DEBUG).Infof(ctx, "Connecting RPC to uri=%v", uri)
 	conn, err := grpc.Dial(uri.Host,
@@ -308,24 +169,6 @@ func genOrchestratorReq(b common.Broadcaster) (*net.OrchestratorRequest, error) 
 	return &net.OrchestratorRequest{Address: b.Address().Bytes(), Sig: sig}, nil
 }
 
-func genEndSessionRequest(sess *BroadcastSession) (*net.EndTranscodingSessionRequest, error) {
-	return &net.EndTranscodingSessionRequest{AuthToken: sess.OrchestratorInfo.AuthToken}, nil
-}
-
-func getOrchestrator(orch Orchestrator, req *net.OrchestratorRequest) (*net.OrchestratorInfo, error) {
-	addr := ethcommon.BytesToAddress(req.Address)
-	if err := verifyOrchestratorReq(orch, addr, req.Sig); err != nil {
-		return nil, fmt.Errorf("Invalid orchestrator request: %v", err)
-	}
-
-	if _, err := authenticateBroadcaster(addr.Hex()); err != nil {
-		return nil, fmt.Errorf("authentication failed: %v", err)
-	}
-
-	// currently, orchestrator == transcoder
-	return orchestratorInfo(orch, addr, orch.ServiceURI().String())
-}
-
 func endTranscodingSession(node *core.LivepeerNode, orch Orchestrator, req *net.EndTranscodingSessionRequest) (*net.EndTranscodingSessionResponse, error) {
 	verifyToken := orch.AuthToken(req.AuthToken.SessionId, req.AuthToken.Expiration)
 	if !bytes.Equal(verifyToken.Token, req.AuthToken.Token) {
@@ -333,54 +176,6 @@ func endTranscodingSession(node *core.LivepeerNode, orch Orchestrator, req *net.
 	}
 	node.EndTranscodingSession(req.AuthToken.SessionId)
 	return &net.EndTranscodingSessionResponse{}, nil
-}
-
-func getPriceInfo(orch Orchestrator, addr ethcommon.Address) (*net.PriceInfo, error) {
-	if AuthWebhookURL != nil {
-		webhookRes := getFromDiscoveryAuthWebhookCache(addr.Hex())
-		if webhookRes != nil && webhookRes.PriceInfo != nil {
-			return webhookRes.PriceInfo, nil
-		}
-	}
-	return orch.PriceInfo(addr)
-}
-
-func orchestratorInfo(orch Orchestrator, addr ethcommon.Address, serviceURI string) (*net.OrchestratorInfo, error) {
-	priceInfo, err := getPriceInfo(orch, addr)
-	if err != nil {
-		return nil, err
-	}
-
-	params, err := orch.TicketParams(addr, priceInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	// Generate auth token
-	sessionID := string(core.RandomManifestID())
-	expiration := time.Now().Add(authTokenValidPeriod).Unix()
-	authToken := orch.AuthToken(sessionID, expiration)
-
-	tr := net.OrchestratorInfo{
-		Transcoder:   serviceURI,
-		TicketParams: params,
-		PriceInfo:    priceInfo,
-		Address:      orch.Address().Bytes(),
-		Capabilities: orch.Capabilities(),
-		AuthToken:    authToken,
-	}
-
-	os := drivers.NodeStorage.NewSession(authToken.SessionId)
-
-	if os != nil {
-		if os.IsExternal() {
-			tr.Storage = []*net.OSInfo{core.ToNetOSInfo(os.GetInfo())}
-		} else {
-			os.EndSession()
-		}
-	}
-
-	return &tr, nil
 }
 
 func verifyOrchestratorReq(orch Orchestrator, addr ethcommon.Address, sig []byte) error {
@@ -393,43 +188,6 @@ func verifyOrchestratorReq(orch Orchestrator, addr ethcommon.Address, sig []byte
 
 type discoveryAuthWebhookRes struct {
 	PriceInfo *net.PriceInfo `json:"priceInfo,omitempty"`
-}
-
-// authenticateBroadcaster returns an error if authentication fails
-// on success it caches the webhook response
-func authenticateBroadcaster(id string) (*discoveryAuthWebhookRes, error) {
-	if AuthWebhookURL == nil {
-		return nil, nil
-	}
-
-	values := map[string]string{"id": id}
-	jsonValues, err := json.Marshal(values)
-	if err != nil {
-		return nil, err
-	}
-	res, err := http.Post(AuthWebhookURL.String(), "application/json", bytes.NewBuffer(jsonValues))
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := ioutil.ReadAll(res.Body)
-	defer res.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	if res.StatusCode != 200 {
-		return nil, errors.New(string(body))
-	}
-
-	webhookRes := &discoveryAuthWebhookRes{}
-	if err := json.Unmarshal(body, webhookRes); err != nil {
-		return nil, err
-	}
-
-	addToDiscoveryAuthWebhookCache(id, webhookRes, authTokenValidPeriod)
-
-	return webhookRes, nil
 }
 
 func addToDiscoveryAuthWebhookCache(id string, webhookRes *discoveryAuthWebhookRes, expiration time.Duration) {

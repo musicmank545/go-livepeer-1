@@ -16,8 +16,6 @@ import (
 	"github.com/livepeer/go-livepeer/core"
 	lpmon "github.com/livepeer/go-livepeer/monitor"
 	"github.com/livepeer/go-livepeer/server"
-	"github.com/livepeer/go-tools/drivers"
-	"github.com/livepeer/livepeer-data/pkg/event"
 	"github.com/livepeer/lpms/ffmpeg"
 )
 
@@ -309,12 +307,6 @@ func StartLivepeer(ctx context.Context, cfg LivepeerConfig) {
 		}
 	}
 
-	//Set Gs bucket for fast verification fail case
-	if *cfg.FVfailGsBucket != "" && *cfg.FVfailGsKey != "" {
-		drivers.SetCreds(*cfg.FVfailGsBucket, *cfg.FVfailGsKey)
-	}
-
-	//Set up DB
 	dbh, err := common.InitDB(*cfg.Datadir + "/lpdb.sqlite3")
 	if err != nil {
 		glog.Errorf("Error opening DB: %v", err)
@@ -408,31 +400,6 @@ func StartLivepeer(ctx context.Context, cfg LivepeerConfig) {
 
 	n.Capabilities = core.NewCapabilities(transcoderCaps, core.MandatoryOCapabilities())
 	*cfg.CliAddr = defaultAddr(*cfg.CliAddr, "127.0.0.1", CliPort)
-
-	if drivers.NodeStorage == nil {
-		// base URI will be empty for broadcasters; that's OK
-		drivers.NodeStorage = drivers.NewMemoryDriver(n.GetServiceURI())
-	}
-
-	if *cfg.MetadataPublishTimeout > 0 {
-		server.MetadataPublishTimeout = *cfg.MetadataPublishTimeout
-	}
-	if *cfg.MetadataQueueUri != "" {
-		uri, err := url.ParseRequestURI(*cfg.MetadataQueueUri)
-		if err != nil {
-			glog.Fatalf("Error parsing -metadataQueueUri: err=%q", err)
-		}
-		switch uri.Scheme {
-		case "amqp", "amqps":
-			uriStr, exchange, keyNs := *cfg.MetadataQueueUri, *cfg.MetadataAmqpExchange, n.NodeType.String()
-			server.MetadataQueue, err = event.NewAMQPExchangeProducer(context.Background(), uriStr, exchange, keyNs)
-			if err != nil {
-				glog.Fatalf("Error establishing AMQP connection: err=%q", err)
-			}
-		default:
-			glog.Fatalf("Unsupported scheme in -metadataUri: %s", uri.Scheme)
-		}
-	}
 
 	srv := &http.Server{Addr: *cfg.CliAddr}
 
