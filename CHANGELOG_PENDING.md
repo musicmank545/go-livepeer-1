@@ -7,6 +7,8 @@
 ### Features ⚒
 
 #### General
+- \#2758 Accept only active Os to receive traffic and redeem tickets (@leszko)
+- \#2775 Reduce number of ETH RPC calls during block polling (@leszko)
 
 #### Broadcaster
 
@@ -15,20 +17,16 @@
 #### Transcoder
 
 ### Bug Fixes 🐞
+- \#2759 Parse keystore address without 0x prefix, fix parse error logging
+- \#2764 Call session end asynchronously to avoid unnecessary blocking (@mjh1)
+- \#2777 Only write session end log message if session exists (@mjh1)
 
 #### CLI
 
 #### General
-- [#2616](https://github.com/livepeer/go-livepeer/pull/2616) cmd: Echo explicitly set config values on node start
-- [#2583](https://github.com/livepeer/go-livepeer/pull/2583) eth: Set tx GasFeeCap to min(gasPriceEstimate, current GasFeeCap) (@yondonfu)
-- [#2586](https://github.com/livepeer/go-livepeer/pull/2586) Broadcaster: Don't pass a nil context into grpc call or it panics (@thomshutt, @cyberj0g)
 
 #### Broadcaster
-- [#2573](https://github.com/livepeer/go-livepeer/pull/2573) server: Fix timeout for stream recording background jobs (@victorges)
-- [#2586](https://github.com/livepeer/go-livepeer/pull/2586) Refactor RTMP connection object management to prevent race conditions (@cyberj0g)
 
 #### Orchestrator
-- [#2591](https://github.com/livepeer/go-livepeer/pull/2591) Return from transcode loop if transcode session is ended by B (@yondonfu)
-- [#2592](https://github.com/livepeer/go-livepeer/pull/2592) Enable Orchestrator to set pricing by broadcaster ETH address
 
 #### Transcoder

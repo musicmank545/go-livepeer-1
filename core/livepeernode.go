@@ -14,7 +14,6 @@ import (
 	"math/big"
 	"math/rand"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -39,33 +38,18 @@ type NodeType int
 
 const (
 	DefaultNode NodeType = iota
-	BroadcasterNode
-	OrchestratorNode
 	TranscoderNode
-	RedeemerNode
 )
 
-var nodeTypeStrs = map[NodeType]string{
-	DefaultNode:      "default",
-	BroadcasterNode:  "broadcaster",
-	OrchestratorNode: "orchestrator",
-	TranscoderNode:   "transcoder",
-	RedeemerNode:     "redeemer",
-}
-
 func (t NodeType) String() string {
-	str, ok := nodeTypeStrs[t]
-	if !ok {
-		return "unknown"
-	}
-	return str
+	return "transcoder"
 }
 
 // LivepeerNode handles videos going in and coming out of the Livepeer network.
 type LivepeerNode struct {
 
 	// Common fields
-	Eth      eth.LivepeerEthClient
+	//Eth      eth.LivepeerEthClient
 	WorkDir  string
 	NodeType NodeType
 	Database *common.DB
@@ -77,11 +61,11 @@ type LivepeerNode struct {
 	OrchSecret        string
 	Transcoder        Transcoder
 	TranscoderManager *RemoteTranscoderManager
-	Balances          *AddressBalances
-	Capabilities      *Capabilities
-	AutoAdjustPrice   bool
+	//Balances          *AddressBalances
+	Capabilities    *Capabilities
+	AutoAdjustPrice bool
 	// Broadcaster public fields
-	Sender pm.Sender
+	//Sender pm.Sender
 
 	// Thread safety for config fields
 	mu             sync.RWMutex
@@ -97,7 +81,7 @@ type LivepeerNode struct {
 func NewLivepeerNode(e eth.LivepeerEthClient, wd string, dbh *common.DB) (*LivepeerNode, error) {
 	rand.Seed(time.Now().UnixNano())
 	return &LivepeerNode{
-		Eth:             e,
+		//Eth:             e,
 		WorkDir:         wd,
 		Database:        dbh,
 		AutoAdjustPrice: true,
@@ -122,35 +106,35 @@ func (n *LivepeerNode) SetServiceURI(newUrl *url.URL) {
 	n.serviceURI = *newUrl
 }
 
-// SetBasePrice sets the base price for an orchestrator on the node
-func (n *LivepeerNode) SetBasePrice(b_eth_addr string, price *big.Rat) {
-	addr := strings.ToLower(b_eth_addr)
-	n.mu.Lock()
-	defer n.mu.Unlock()
+// // SetBasePrice sets the base price for an orchestrator on the node
+// func (n *LivepeerNode) SetBasePrice(b_eth_addr string, price *big.Rat) {
+// 	addr := strings.ToLower(b_eth_addr)
+// 	n.mu.Lock()
+// 	defer n.mu.Unlock()
 
-	n.priceInfo[addr] = price
-}
+// 	n.priceInfo[addr] = price
+// }
 
-// GetBasePrice gets the base price for an orchestrator
-func (n *LivepeerNode) GetBasePrice(b_eth_addr string) *big.Rat {
-	addr := strings.ToLower(b_eth_addr)
-	n.mu.RLock()
-	defer n.mu.RUnlock()
+// // GetBasePrice gets the base price for an orchestrator
+// func (n *LivepeerNode) GetBasePrice(b_eth_addr string) *big.Rat {
+// 	addr := strings.ToLower(b_eth_addr)
+// 	n.mu.RLock()
+// 	defer n.mu.RUnlock()
 
-	return n.priceInfo[addr]
-}
+// 	return n.priceInfo[addr]
+// }
 
-func (n *LivepeerNode) GetBasePrices() map[string]*big.Rat {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
+// func (n *LivepeerNode) GetBasePrices() map[string]*big.Rat {
+// 	n.mu.RLock()
+// 	defer n.mu.RUnlock()
 
-	return n.priceInfo
-}
+// 	return n.priceInfo
+// }
 
-// SetMaxFaceValue sets the faceValue upper limit for tickets received
-func (n *LivepeerNode) SetMaxFaceValue(maxfacevalue *big.Int) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
+// // SetMaxFaceValue sets the faceValue upper limit for tickets received
+// func (n *LivepeerNode) SetMaxFaceValue(maxfacevalue *big.Int) {
+// 	n.mu.Lock()
+// 	defer n.mu.Unlock()
 
-	n.Recipient.SetMaxFaceValue(maxfacevalue)
-}
+// 	n.Recipient.SetMaxFaceValue(maxfacevalue)
+// }

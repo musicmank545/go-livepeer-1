@@ -22,12 +22,21 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Check out code
-        uses: actions/checkout@v3.0.2
+        uses: actions/checkout@v3.5.2
         with:
           fetch-depth: 0
           # Check https://github.com/livepeer/go-livepeer/pull/1891
           # for ref value discussion
           ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Cleanup hosted runner
+        run: |
+          sudo apt purge -yqq dotnet-* mono-* llvm-* adoptopenjdk-* libllvm* powershell* openjdk-* \
+          temurin-* mongodb-* firefox mysql-* \
+          hhvm google-chrome-stable \
+          libgl1-mesa-dri microsoft-edge-stable \
+          google-cloud-sdk azure-cli
+          sudo apt autoremove -y
 
       - uses: actions-ecosystem/action-regex-match@v2
         id: match-tag
@@ -97,10 +106,11 @@ jobs:
 
       - name: Build and push livepeer builder
         if: ${{ steps.match-tag.outputs.match != '' }}
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v4
         with:
           build-args: |
             BUILD_TAGS=${{ steps.build-tag.outputs.build-tags }}
+          context: .
           platforms: linux/amd64, linux/arm64
           push: true
           tags: ${{ steps.meta-builder.outputs.tags }}
@@ -111,13 +121,14 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push livepeer docker image
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v4
         with:
           build-args: |
             BUILD_TAGS=${{ steps.build-tag.outputs.build-tags }}
           # linux/arm64 is disabled until
           # <https://github.com/livepeer/go-livepeer/issues/2545> gets
           # resolved
+          context: .
           platforms: linux/amd64, linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

@@ -144,18 +144,15 @@ if [[ "$UNAME" == "Darwin" ]]; then
 else
   # If we have clang, we can compile with CUDA support!
   if which clang >/dev/null; then
-    echo "clang detected, building with GPU support"
+    echo "clang detected, building with GPU and Tensorflow support"
     EXTRA_FFMPEG_FLAGS="$EXTRA_FFMPEG_FLAGS --enable-cuda --enable-cuda-llvm --enable-cuvid --enable-nvenc --enable-decoder=h264_cuvid,hevc_cuvid,vp8_cuvid,vp9_cuvid --enable-filter=scale_cuda,signature_cuda,hwupload_cuda --enable-encoder=h264_nvenc,hevc_nvenc"
-    if [[ $BUILD_TAGS == *"experimental"* ]]; then
-      if [[ ! -e "/usr/local/lib/libtensorflow_framework.so" ]]; then
-        LIBTENSORFLOW_VERSION=2.6.3 &&
-          curl -LO https://storage.googleapis.com/tensorflow/libtensorflow/libtensorflow-gpu-linux-x86_64-${LIBTENSORFLOW_VERSION}.tar.gz &&
-          sudo tar -C /usr/local -xzf libtensorflow-gpu-linux-x86_64-${LIBTENSORFLOW_VERSION}.tar.gz &&
-          rm libtensorflow-gpu-linux-x86_64-${LIBTENSORFLOW_VERSION}.tar.gz
-      fi
-      echo "experimental tag detected, building with Tensorflow support"
-      EXTRA_FFMPEG_FLAGS="$EXTRA_FFMPEG_FLAGS --enable-libtensorflow"
+    if [[ ! -e "${ROOT}/compiled/lib/libtensorflow_framework.so" ]]; then
+      LIBTENSORFLOW_VERSION=2.3.4 &&
+        curl -LO https://storage.googleapis.com/tensorflow/libtensorflow/libtensorflow-gpu-linux-x86_64-${LIBTENSORFLOW_VERSION}.tar.gz &&
+        tar -C ${ROOT}/compiled/ -xzf libtensorflow-gpu-linux-x86_64-${LIBTENSORFLOW_VERSION}.tar.gz &&
+        rm libtensorflow-gpu-linux-x86_64-${LIBTENSORFLOW_VERSION}.tar.gz
     fi
+    EXTRA_FFMPEG_FLAGS="$EXTRA_FFMPEG_FLAGS --enable-libtensorflow"
   fi
 fi
 
@@ -173,7 +170,7 @@ fi
 if [[ ! -e "$ROOT/ffmpeg/libavcodec/libavcodec.a" ]]; then
   git clone https://github.com/livepeer/FFmpeg.git "$ROOT/ffmpeg" || echo "FFmpeg dir already exists"
   cd "$ROOT/ffmpeg"
-  git checkout 3a20cc82fb8efb3eec06c7277348f5ce4fbb44c8
+  git checkout 2e18d069668c143f3c251067abd25389e411d022
   ./configure ${TARGET_OS:-} $DISABLE_FFMPEG_COMPONENTS --fatal-warnings \
     --enable-libx264 --enable-gpl \
     --enable-protocol=rtmp,file,pipe \

@@ -38,13 +38,13 @@ This project requires `go` and a unix shell.
 
 ## Getting Started
 
-To get started, clone the repo and follow the [installation guide](https://docs.livepeer.org/installation/install-livepeer/installing-for-development#build-and-install).
+To get started, clone the repo and follow the [installation guide](https://docs.livepeer.org/guides/orchestrating/install-go-livepeer).
 
 Next, follow [the guide to set up a private ETH network with the Livepeer protocol deployed](cmd/devtool/README.md).
 
 ## Contributing
 
-Thanks for your interest in contributing to go-livepeer. There are many ways you can contribute to the project, even non-developers.
+Thanks for your interest in contributing to go-livepeer. There are many ways you can contribute to the project, even for non-developers.
 
 To start, take a few minutes to **[read the "Contributing to go-livepeer" guide](CONTRIBUTING.md)**.
 

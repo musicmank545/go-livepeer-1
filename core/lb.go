@@ -43,6 +43,8 @@ func (lb *LoadBalancingTranscoder) EndTranscodingSession(sessionId string) {
 	lb.mu.RLock()
 	defer lb.mu.RUnlock()
 	if session, exists := lb.sessions[sessionId]; exists {
+		// delete session id here to avoid the race
+		delete(lb.sessions, sessionId)
 		// signal transcode loop finish for this session
 		close(session.stop)
 		clog.V(common.DEBUG).Infof(context.TODO(), "LB: Transcode session id=%s teared down", session.key)
@@ -100,10 +102,13 @@ func (lb *LoadBalancingTranscoder) createSession(ctx context.Context, md *SegTra
 	// Acquire transcode session. Map to job id + assigned transcoder
 	key := job + "_" + transcoder
 	costEstimate := calculateCost(md.Profiles)
+
+	// create the transcoder - with AI capabilities, if required by local or stream configuration
 	var lpmsSession TranscoderSession
-	if md.DetectorEnabled {
+	setEffectiveDetectorConfig(md)
+	if md.DetectorEnabled && len(md.DetectorProfiles) == 1 {
 		var err error
-		lpmsSession, err = lb.newDetectorT(DetectorProfile, transcoder)
+		lpmsSession, err = lb.newDetectorT(md.DetectorProfiles[0], transcoder)
 		if err != nil {
 			return nil, err
 		}
@@ -127,10 +132,9 @@ func (lb *LoadBalancingTranscoder) createSession(ctx context.Context, md *SegTra
 		lb.mu.Lock()
 		defer lb.mu.Unlock()
 		_, exists := lb.sessions[job]
-		if !exists {
-			return
+		if exists {
+			delete(lb.sessions, job)
 		}
-		delete(lb.sessions, job)
 		lb.load[transcoder] -= costEstimate
 		clog.V(common.DEBUG).Infof(ctx, "LB: Deleted transcode session for key=%s", session.key)
 	}
