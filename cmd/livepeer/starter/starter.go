@@ -407,7 +407,7 @@ func StartLivepeer(ctx context.Context, cfg LivepeerConfig) {
 		lpmon.MaxSessions(core.MaxSessions)
 	}
 
-	httpIngest := true
+	//httpIngest := true
 
 	n.Capabilities = core.NewCapabilities(transcoderCaps, core.MandatoryOCapabilities())
 	*cfg.CliAddr = defaultAddr(*cfg.CliAddr, "127.0.0.1", CliPort)
@@ -440,10 +440,10 @@ func StartLivepeer(ctx context.Context, cfg LivepeerConfig) {
 	//Create Livepeer Node
 
 	//Set up the media server
-	s, err := server.NewLivepeerServer(*cfg.RtmpAddr, n, httpIngest, *cfg.TranscodingOptions)
-	if err != nil {
-		glog.Fatalf("Error creating Livepeer server: err=%q", err)
-	}
+	// s, err := server.NewLivepeerServer(*cfg.RtmpAddr, n, httpIngest, *cfg.TranscodingOptions)
+	// if err != nil {
+	// 	glog.Fatalf("Error creating Livepeer server: err=%q", err)
+	// }
 
 	ec := make(chan error)
 	tc := make(chan struct{})
@@ -451,21 +451,21 @@ func StartLivepeer(ctx context.Context, cfg LivepeerConfig) {
 	msCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if *cfg.CurrentManifest {
-		glog.Info("Current ManifestID will be available over ", *cfg.HttpAddr)
-		s.ExposeCurrentManifest = *cfg.CurrentManifest
-	}
+	// if *cfg.CurrentManifest {
+	// 	glog.Info("Current ManifestID will be available over ", *cfg.HttpAddr)
+	// 	s.ExposeCurrentManifest = *cfg.CurrentManifest
+	// }
 
 	srv := &http.Server{Addr: *cfg.CliAddr}
-	go func() {
-		s.StartCliWebserver(srv)
-		close(wc)
-	}()
-	if n.NodeType != core.RedeemerNode {
-		go func() {
-			ec <- s.StartMediaServer(msCtx, *cfg.HttpAddr)
-		}()
-	}
+	// go func() {
+	// 	s.StartCliWebserver(srv)
+	// 	close(wc)
+	// }()
+	// if n.NodeType != core.RedeemerNode {
+	// 	go func() {
+	// 		ec <- s.StartMediaServer(msCtx, *cfg.HttpAddr)
+	// 	}()
+	// }
 
 	if n.OrchSecret == "" {
 		glog.Fatal("Missing -orchSecret")
