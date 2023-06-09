@@ -79,15 +79,15 @@ func NewLivepeerNode(wd string, dbh *common.DB) (*LivepeerNode, error) {
 	rand.Seed(time.Now().UnixNano())
 	return &LivepeerNode{
 		//Eth:             e,
-		WorkDir:         wd,
-		Database:        dbh,
-		AutoAdjustPrice: true,
-		SegmentChans:    make(map[ManifestID]SegmentChan),
-		segmentMutex:    &sync.RWMutex{},
-		Capabilities:    &Capabilities{capacities: map[Capability]int{}},
-		priceInfo:       make(map[string]*big.Rat),
-		StorageConfigs:  make(map[string]*transcodeConfig),
-		storageMutex:    &sync.RWMutex{},
+		WorkDir:  wd,
+		Database: dbh,
+		//AutoAdjustPrice: true,
+		//SegmentChans:    make(map[ManifestID]SegmentChan),
+		//segmentMutex:    &sync.RWMutex{},
+		//Capabilities:    &Capabilities{capacities: map[Capability]int{}},
+		//priceInfo:       make(map[string]*big.Rat),
+		//StorageConfigs: make(map[string]*transcodeConfig),
+		//storageMutex:   &sync.RWMutex{},
 	}, nil
 }
 
